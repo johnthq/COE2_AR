@@ -1,0 +1,81 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# COE2_AR Workflow – JupyterLab + libksc
+#
+# Builds libksc (C++20 / nanobind / Eigen via scikit-build-core) and installs
+# all Python dependencies needed for the COE2_AR workflow notebooks.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM python:3.11-slim-bookworm
+
+# ── System build deps ────────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        cmake \
+        ninja-build \
+        g++ \
+        # Eigen3 headers (used by libksc)
+        libeigen3-dev \
+        # GDAL runtime + dev headers (load_terrain_dat / GeoTIFF support)
+        libgdal-dev \
+        gdal-bin \
+        # Common geospatial / image I/O libs
+        libproj-dev \
+        libgeos-dev \
+        # Keeps pip wheel builds happy
+        build-essential \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python deps ──────────────────────────────────────────────────────────────
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+        # libksc build requirements (declared in pyproject.toml)
+        "scikit-build-core>=0.4.3" \
+        "nanobind>=1.3.2" \
+        # Scientific / geospatial stack
+        numpy \
+		pandas \
+		tqdm \
+        scipy \
+        matplotlib \
+        GDAL==$(gdal-config --version) \
+        pyproj \
+        shapely \
+        # Image processing / ML
+        scikit-image \
+        scikit-learn \
+        colorcet \
+        # Jupyter
+        jupyterlab \
+        "notebook<7"\
+        ipywidgets \
+		jupyterlab_widgets \
+		widgetsnbextension
+
+# ── Enable classic Notebook widget extensions BEFORE installing ipympl ───────
+RUN jupyter nbextension enable --py widgetsnbextension --sys-prefix
+
+RUN pip install --no-cache-dir ipympl && \
+    jupyter nbextension enable --py ipympl --sys-prefix
+
+# ── Clone the repo and install libksc ────────────────────────────────────────
+ARG COE2_AR_REF=main
+RUN git clone --depth 1 --filter=blob:none --sparse \
+        -b "${COE2_AR_REF}" \
+        https://github.com/Kexanone/COE2_AR.git /opt/COE2_AR && \
+    cd /opt/COE2_AR && \
+    git sparse-checkout set workflow && \
+    pip install --no-cache-dir /opt/COE2_AR/workflow/libksc
+
+# ── Working directory – mount your data/notebooks here ───────────────────────
+WORKDIR /workspace
+
+EXPOSE 8888
+
+# ── Launch JupyterLab ────────────────────────────────────────────────────────
+CMD ["jupyter", "notebook", \
+     "--ip=0.0.0.0", \
+     "--port=8888", \
+     "--no-browser", \
+     "--NotebookApp.token=''", \
+     "--NotebookApp.password=''", \
+     "--allow-root"]

@@ -1,0 +1,27 @@
+services:
+  arcoe2-notebook:
+
+    # Use the locally built Docker image
+    image: arcoe2-notebook
+
+    # Name of the running container
+    container_name: arcoe2-notebook
+
+    # Forward Jupyter Notebook port to the host
+    ports:
+      - "8888:8888"
+
+    # Mount the local workflow directory into the container
+    # this will be where your map data folder is found or created
+    volumes:
+      - /location/to/data/workflow:/workflow
+
+    # Default working directory inside the container
+    working_dir: /workflow
+
+    # Keep the container interactive
+    stdin_open: true
+    tty: true
+
+    # Restart automatically unless manually stopped
+    restart: unless-stopped
